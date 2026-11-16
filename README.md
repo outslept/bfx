@@ -1,43 +1,45 @@
-# bf-ts
+# bfx
 
-A minimal Brainfuck toolchain written in TypeScript.
+minimal brainfuck toolchain written in typescript.
 
-Includes a lexer, parser, interpreter, and CLI.
+includes a lexer, optimizing parser, bytecode interpreter, and cli.
 
-## Features
+## features
 
-- Brainfuck lexer and parser
-- Optimized instruction representation
-- Common loop optimizations
-- Dynamically growing tape
-- Execution limits
-- Byte-oriented I/O
-- CLI support for files and stdin
+- brainfuck lexer and optimizing parser
+- typed-array bytecode representation
+- peephole and loop optimizations (`clear`, `set`, `muladd`, `scanl`, `scanr`)
+- dynamically growing 8-bit tape
+- configurable step and memory limits
+- byte-oriented i/o
+- cli support for files and stdin
 
-## Usage
+## usage
 
-Run a file:
-
-```bash
-bf-ts hello.bf
-```
-
-Read source from stdin:
+run a file:
 
 ```bash
-echo '++++++++[>++++++++<-]>+.' | bf-ts -
+bfx hello.bf
 ```
 
-Show help:
+read source from stdin:
 
 ```bash
-bf-ts --help
+echo '++++++++[>++++++++<-]>+.' | bfx -
 ```
 
-## API
+options:
+
+```text
+-h, --help       show help for the command
+    --no-color   disable color output
+-v, --version    print the cli version
+```
+
+## api
 
 ```ts
-import { Lexer, Parser, Interpreter } from 'bf-ts';
+import { Lexer, Parser, Interpreter } from 'bfx';
 
 const lexer = new Lexer('++++++++[>++++++++<-]>+.');
 const parser = new Parser();
@@ -47,7 +49,7 @@ const interpreter = new Interpreter(program);
 const output = interpreter.run();
 ```
 
-Input and runtime limits can be configured:
+configure input and runtime limits:
 
 ```ts
 const interpreter = new Interpreter(program, {
@@ -58,9 +60,9 @@ const interpreter = new Interpreter(program, {
 });
 ```
 
-## Brainfuck
+## brainfuck
 
-Supported instructions:
+supported instructions:
 
 ```text
 >  move right
@@ -73,4 +75,4 @@ Supported instructions:
 ]  loop end
 ```
 
-All other characters are ignored.
+all other characters are ignored.
