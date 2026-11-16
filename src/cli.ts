@@ -69,7 +69,7 @@ function showHelp(noColorOpt: boolean): void {
   const heading = (s: string): string => (styled ? styleText(['bold', 'magenta'], s) : s);
   const cmd = (s: string): string => (styled ? styleText('cyan', s) : s);
 
-  const help = `${bold('bf-ts')} <file> [options]
+  const help = `${bold('bfx')} <file> [options]
 ${dim('Execute a Brainfuck program from a file or stdin')}
 
 ${heading('Arguments:')}
@@ -82,10 +82,10 @@ ${heading('Options:')}
 
 ${heading('Examples:')}
   Execute a Brainfuck file
-    ${cmd('bf-ts hello.bf')}
+    ${cmd('bfx hello.bf')}
 
   Execute a program from stdin
-    ${cmd('bf-ts -')}
+    ${cmd('bfx -')}
 
 ${heading('Notes:')}
   Source input is UTF-8 text up to 10 MB. Program output is written as raw bytes to stdout.
@@ -166,9 +166,9 @@ function parseCliArgs(args: string[]): {
   if (unknownOption) {
     const suggestion = suggestOption(unknownOption);
     const hint = suggestion ? ` Did you mean ${suggestion}?` : '';
-    throw new CliError(`Unknown option ${unknownOption} for bf-ts.${hint}`, EXIT_USAGE, [], {
+    throw new CliError(`Unknown option ${unknownOption} for bfx.${hint}`, EXIT_USAGE, [], {
       label: 'See all options',
-      command: 'bf-ts --help',
+      command: 'bfx --help',
     });
   }
 
@@ -179,16 +179,16 @@ function parseCliArgs(args: string[]): {
   if (parsed.positionals.length === 0) {
     throw new CliError("Can't execute without a file argument.", EXIT_USAGE, [], {
       label: 'Pass a file or read from stdin',
-      command: 'bf-ts <FILE>',
+      command: 'bfx <FILE>',
     });
   }
 
   if (parsed.positionals.length > 1) {
     throw new CliError(
-      `Can't execute bf-ts. Expected 1 file argument, got ${parsed.positionals.length}.`,
+      `Can't execute bfx. Expected 1 file argument, got ${parsed.positionals.length}.`,
       EXIT_USAGE,
       [],
-      { label: 'See usage', command: 'bf-ts --help' },
+      { label: 'See usage', command: 'bfx --help' },
     );
   }
 
@@ -200,7 +200,7 @@ function readSource(sourceFile: string): string {
     if (process.stdin.isTTY) {
       throw new CliError("Can't read from stdin without piped input.", EXIT_USAGE, [], {
         label: 'Pipe a program to stdin',
-        command: 'bf-ts -',
+        command: 'bfx -',
       });
     }
     const buf = readFileSync(0);
@@ -216,7 +216,7 @@ function readSource(sourceFile: string): string {
   if (!stat) {
     throw new CliError(`Couldn't find file ${sourceFile}.`, EXIT_ERROR, [], {
       label: 'Check the file path, then run',
-      command: 'bf-ts <FILE>',
+      command: 'bfx <FILE>',
     });
   }
   if (stat.isDirectory()) {
@@ -224,7 +224,7 @@ function readSource(sourceFile: string): string {
       `Can't execute ${sourceFile}. Path is a directory, not a file.`,
       EXIT_ERROR,
       [],
-      { label: 'Pass a Brainfuck source file', command: 'bf-ts <FILE>' },
+      { label: 'Pass a Brainfuck source file', command: 'bfx <FILE>' },
     );
   }
   if (stat.size > MAX_SOURCE_SIZE) {
