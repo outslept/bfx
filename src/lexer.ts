@@ -1,4 +1,4 @@
-import type { BFChar, Location, Token } from './types';
+import type { BFChar, Token } from './types';
 
 const LANG = new Set<string>(['<', '>', '+', '-', '.', ',', '[', ']']);
 
@@ -27,12 +27,15 @@ export class Lexer {
   }
 
   private nextTokenInternal(): Token | null {
-    const n = this.src.length;
-    while (this.i < n) {
-      const ch = this.src[this.i]!;
-      const loc: Location = { line: this.line, column: this.col, index: this.i };
+    const { src } = this;
+    const n = src.length;
 
-      this.i += 1;
+    while (this.i < n) {
+      const index = this.i++;
+      const ch = src[index]!;
+      const line = this.line;
+      const column = this.col;
+
       if (ch === '\n') {
         this.line += 1;
         this.col = 1;
@@ -40,7 +43,9 @@ export class Lexer {
         this.col += 1;
       }
 
-      if (isBF(ch)) return { ch, loc };
+      if (isBF(ch)) {
+        return { ch, loc: { line, column, index } };
+      }
     }
     return null;
   }

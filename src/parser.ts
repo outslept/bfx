@@ -1,29 +1,19 @@
 import { Lexer } from './lexer';
-import { Op, type Program, type Token } from './types';
+import { Op, type BFChar, type Program, type Token } from './types';
 
-type IRLoop = { op: 'JmpF'; target: number } | { op: 'JmpB'; target: number };
+interface Instruction {
+  op: Op;
+  a: number;
+  b: number;
+}
 
-type IRFlat =
-  | { op: 'Move'; n: number }
-  | { op: 'Add'; n: number }
-  | { op: 'Out'; n: number }
-  | { op: 'In'; n: number }
-  | IRLoop;
-
-type IROpt =
-  | { op: 'Move'; n: number }
-  | { op: 'Add'; n: number }
-  | { op: 'Out'; n: number }
-  | { op: 'In'; n: number }
-  | { op: 'Clear' }
-  | { op: 'Set'; n: number }
-  | { op: 'MulAdd'; offset: number; factor: number }
-  | { op: 'ScanR' }
-  | { op: 'ScanL' }
-  | IRLoop;
+function wrapSignedByte(n: number): number {
+  const mod = ((n % 256) + 256) % 256;
+  return mod <= 127 ? mod : mod - 256;
+}
 
 export class Parser {
-  private flat: IRFlat[] = [];
+  private flat: Instruction[] = [];
   private forwardStack: Array<{ index: number; loc: { line: number; column: number } }> = [];
 
   parse(lexer: Lexer): Program {
@@ -36,198 +26,177 @@ export class Parser {
       this.emitFromToken(lexer, t);
     }
 
-    if (this.forwardStack.length) {
+    if (this.forwardStack.length > 0) {
       const u = this.forwardStack[this.forwardStack.length - 1]!;
       throw new Error(`Unmatched '[' at ${u.loc.line}:${u.loc.column}`);
     }
 
-    const optimized = this.optimize(this.flat);
-    return this.assemble(optimized);
+    return this.assemble(this.optimize(this.flat));
+  }
+
+  private countMore(lexer: Lexer, ch: BFChar): number {
+    let count = 0;
+    while (lexer.peek()?.ch === ch) {
+      lexer.nextToken();
+      count += 1;
+    }
+    return count;
   }
 
   private emitFromToken(lexer: Lexer, token: Token): void {
-    const countMore = (ch: Token['ch']): number => {
-      let c = 0;
-      while (true) {
-        const p = lexer.peek();
-        if (p && p.ch === ch) {
-          lexer.nextToken();
-          c += 1;
-        } else break;
-      }
-      return c;
-    };
-
     switch (token.ch) {
       case '>': {
-        const n = 1 + countMore('>');
-        this.flat.push({ op: 'Move', n });
+        this.flat.push({ op: Op.Move, a: 1 + this.countMore(lexer, '>'), b: 0 });
         break;
       }
       case '<': {
-        const n = 1 + countMore('<');
-        this.flat.push({ op: 'Move', n: -n });
+        this.flat.push({ op: Op.Move, a: -(1 + this.countMore(lexer, '<')), b: 0 });
         break;
       }
       case '+': {
-        const n = 1 + countMore('+');
-        if (n % 256 !== 0) this.flat.push({ op: 'Add', n });
+        const n = 1 + this.countMore(lexer, '+');
+        if (n % 256 !== 0) this.flat.push({ op: Op.Add, a: n, b: 0 });
         break;
       }
       case '-': {
-        const n = 1 + countMore('-');
-        if (n % 256 !== 0) this.flat.push({ op: 'Add', n: -n });
+        const n = 1 + this.countMore(lexer, '-');
+        if (n % 256 !== 0) this.flat.push({ op: Op.Add, a: -n, b: 0 });
         break;
       }
       case '.': {
-        const n = 1 + countMore('.');
-        this.flat.push({ op: 'Out', n });
+        this.flat.push({ op: Op.Out, a: 1 + this.countMore(lexer, '.'), b: 0 });
         break;
       }
       case ',': {
-        const n = 1 + countMore(',');
-        this.flat.push({ op: 'In', n });
+        this.flat.push({ op: Op.In, a: 1 + this.countMore(lexer, ','), b: 0 });
         break;
       }
       case '[': {
-        const idx = this.flat.length;
-        this.forwardStack.push({ index: idx, loc: token.loc });
-        this.flat.push({ op: 'JmpF', target: 0 });
+        this.forwardStack.push({ index: this.flat.length, loc: token.loc });
+        this.flat.push({ op: Op.JmpF, a: 0, b: 0 });
         break;
       }
       case ']': {
         const top = this.forwardStack.pop();
         if (!top) throw new Error(`Unmatched ']' at ${token.loc.line}:${token.loc.column}`);
-        this.flat[top.index] = { op: 'JmpF', target: this.flat.length };
-        this.flat.push({ op: 'JmpB', target: top.index + 1 });
+        this.flat[top.index]!.a = this.flat.length;
+        this.flat.push({ op: Op.JmpB, a: top.index + 1, b: 0 });
         break;
       }
     }
   }
 
-  private optimize(input: IRFlat[]): IROpt[] {
-    const out: IROpt[] = [];
+  private optimize(input: Instruction[]): Instruction[] {
+    const out: Instruction[] = [];
     const loopStack: number[] = [];
 
     for (let i = 0; i < input.length; i++) {
       const ins = input[i]!;
 
-      if (ins.op === 'JmpF') {
-        const j = ins.target;
+      if (ins.op === Op.JmpF) {
+        const j = ins.a;
         const closer = input[j];
-        if (!closer || closer.op !== 'JmpB') throw new Error('Invalid jump structure');
+        if (!closer || closer.op !== Op.JmpB) throw new Error('Invalid jump structure');
 
-        if (this.tryScan(input, out, i, j)) {
-          i = j;
-          continue;
-        }
-        if (this.tryMulLoop(input, out, i, j)) {
+        if (this.tryScan(input, out, i, j) || this.tryMulLoop(input, out, i, j)) {
           i = j;
           continue;
         }
 
         loopStack.push(out.length);
-        out.push({ op: 'JmpF', target: 0 });
+        out.push({ op: Op.JmpF, a: 0, b: 0 });
         continue;
       }
 
-      if (ins.op === 'JmpB') {
+      if (ins.op === Op.JmpB) {
         const start = loopStack.pop();
         if (start === undefined) throw new Error('Unbalanced loops during optimize');
-        out[start] = { op: 'JmpF', target: out.length };
-        out.push({ op: 'JmpB', target: start + 1 });
+        out[start]!.a = out.length;
+        out.push({ op: Op.JmpB, a: start + 1, b: 0 });
         continue;
       }
 
-      this.pushMerged(out, ins as Extract<IROpt, { op: 'Move' | 'Add' | 'Out' | 'In' }>);
+      this.pushMerged(out, ins);
     }
 
-    if (loopStack.length) throw new Error('Unbalanced loops after optimize');
+    if (loopStack.length > 0) throw new Error('Unbalanced loops after optimize');
     return out;
   }
 
-  private pushMerged(out: IROpt[], inst: IROpt): void {
-    const prev = out[out.length - 1];
-
-    if (inst.op === 'Move' && prev && prev.op === 'Move') {
-      const net = prev.n + inst.n;
-      out.pop();
-      if (net !== 0) out.push({ op: 'Move', n: net });
+  private pushMerged(out: Instruction[], inst: Instruction): void {
+    const prev = out.length > 0 ? out[out.length - 1] : undefined;
+    if (!prev) {
+      out.push(inst);
       return;
     }
 
-    if (inst.op === 'Add' && prev && prev.op === 'Add') {
-      out.pop();
-      const net = prev.n + inst.n;
-      const mod = ((net % 256) + 256) % 256;
-      if (mod !== 0) out.push({ op: 'Add', n: mod <= 127 ? mod : mod - 256 });
+    if (inst.op === Op.Move && prev.op === Op.Move) {
+      const net = prev.a + inst.a;
+      if (net === 0) out.pop();
+      else prev.a = net;
       return;
     }
 
-    if (inst.op === 'Out' && prev && prev.op === 'Out') {
-      prev.n += inst.n;
-      return;
-    }
-    if (inst.op === 'In' && prev && prev.op === 'In') {
-      prev.n += inst.n;
-      return;
-    }
-
-    if (inst.op === 'Clear' && prev && prev.op === 'Add') {
-      out.pop();
-      out.push({ op: 'Clear' });
+    if (inst.op === Op.Add && prev.op === Op.Add) {
+      const net = wrapSignedByte(prev.a + inst.a);
+      if (net === 0) out.pop();
+      else prev.a = net;
       return;
     }
 
-    if (inst.op === 'Add' && prev && prev.op === 'Clear') {
-      out.pop();
-      out.push({ op: 'Set', n: inst.n });
+    if ((inst.op === Op.Out && prev.op === Op.Out) || (inst.op === Op.In && prev.op === Op.In)) {
+      prev.a += inst.a;
       return;
     }
 
-    if (inst.op === 'Add' && prev && prev.op === 'Set') {
-      const net = prev.n + inst.n;
-      const mod = ((net % 256) + 256) % 256;
-      prev.n = mod <= 127 ? mod : mod - 256;
+    if (
+      inst.op === Op.Clear &&
+      (prev.op === Op.Add || prev.op === Op.Set || prev.op === Op.Clear)
+    ) {
+      prev.op = Op.Clear;
+      prev.a = 0;
+      return;
+    }
+
+    if (inst.op === Op.Add && prev.op === Op.Clear) {
+      prev.op = Op.Set;
+      prev.a = wrapSignedByte(inst.a);
+      return;
+    }
+
+    if (inst.op === Op.Add && prev.op === Op.Set) {
+      prev.a = wrapSignedByte(prev.a + inst.a);
       return;
     }
 
     out.push(inst);
   }
 
-  private tryScan(input: IRFlat[], out: IROpt[], i: number, j: number): boolean {
+  private tryScan(input: Instruction[], out: Instruction[], i: number, j: number): boolean {
     if (j - i - 1 !== 1) return false;
     const body = input[i + 1]!;
-    if (body.op !== 'Move') return false;
+    if (body.op !== Op.Move || Math.abs(body.a) !== 1) return false;
 
-    if (body.n === 1) {
-      out.push({ op: 'ScanR' });
-      return true;
-    }
-    if (body.n === -1) {
-      out.push({ op: 'ScanL' });
-      return true;
-    }
-    return false;
+    out.push({ op: body.a === 1 ? Op.ScanR : Op.ScanL, a: 0, b: 0 });
+    return true;
   }
 
-  private tryMulLoop(input: IRFlat[], out: IROpt[], i: number, j: number): boolean {
+  private tryMulLoop(input: Instruction[], out: Instruction[], i: number, j: number): boolean {
     if (j - i - 1 < 1) return false;
 
-    const a = input[i + 1]!;
-
-    if (a.op !== 'Add' || Math.abs(a.n) !== 1) return false;
+    const first = input[i + 1]!;
+    if (first.op !== Op.Add || Math.abs(first.a) !== 1) return false;
 
     let ptr = 0;
     const factors = new Map<number, number>();
 
     for (let k = i + 2; k < j; k++) {
       const ins = input[k]!;
-      if (ins.op === 'Move') {
-        ptr += ins.n;
-      } else if (ins.op === 'Add') {
+      if (ins.op === Op.Move) {
+        ptr += ins.a;
+      } else if (ins.op === Op.Add) {
         if (ptr === 0) return false;
-        factors.set(ptr, (factors.get(ptr) ?? 0) + ins.n);
+        factors.set(ptr, (factors.get(ptr) ?? 0) + ins.a);
       } else {
         return false;
       }
@@ -236,13 +205,13 @@ export class Parser {
     if (ptr !== 0) return false;
 
     for (const [offset, factor] of factors) {
-      out.push({ op: 'MulAdd', offset, factor });
+      out.push({ op: Op.MulAdd, a: offset, b: factor });
     }
-    out.push({ op: 'Clear' });
+    this.pushMerged(out, { op: Op.Clear, a: 0, b: 0 });
     return true;
   }
 
-  private assemble(insts: IROpt[]): Program {
+  private assemble(insts: Instruction[]): Program {
     const n = insts.length;
     const op = new Int32Array(n);
     const a = new Int32Array(n);
@@ -250,50 +219,9 @@ export class Parser {
 
     for (let i = 0; i < n; i++) {
       const ins = insts[i]!;
-      switch (ins.op) {
-        case 'Move':
-          op[i] = Op.Move;
-          a[i] = ins.n | 0;
-          break;
-        case 'Add':
-          op[i] = Op.Add;
-          a[i] = ins.n | 0;
-          break;
-        case 'Out':
-          op[i] = Op.Out;
-          a[i] = (ins.n | 0) >>> 0;
-          break;
-        case 'In':
-          op[i] = Op.In;
-          a[i] = (ins.n | 0) >>> 0;
-          break;
-        case 'JmpF':
-          op[i] = Op.JmpF;
-          a[i] = ins.target | 0;
-          break;
-        case 'JmpB':
-          op[i] = Op.JmpB;
-          a[i] = ins.target | 0;
-          break;
-        case 'Clear':
-          op[i] = Op.Clear;
-          break;
-        case 'Set':
-          op[i] = Op.Set;
-          a[i] = ins.n | 0;
-          break;
-        case 'MulAdd':
-          op[i] = Op.MulAdd;
-          a[i] = ins.offset | 0;
-          b[i] = ins.factor | 0;
-          break;
-        case 'ScanR':
-          op[i] = Op.ScanR;
-          break;
-        case 'ScanL':
-          op[i] = Op.ScanL;
-          break;
-      }
+      op[i] = ins.op;
+      a[i] = ins.a;
+      b[i] = ins.b;
     }
 
     return { op, a, b, length: n };

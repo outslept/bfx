@@ -14,11 +14,7 @@ export interface RuntimeOptions {
   onOutputBurst?: (byte: number, count: number) => void;
 }
 
-function isStringInput(input: Uint8Array | string | undefined): input is string {
-  return typeof input === 'string';
-}
-
-const textEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : undefined; // todo: revisit this later
+const textEncoder = new TextEncoder();
 
 export class Interpreter {
   private memory: Uint8Array;
@@ -38,7 +34,7 @@ export class Interpreter {
   ) {
     const initial = Math.max(1, opts.tapeSize ?? DEFAULT_TAPE_SIZE);
     this.memory = new Uint8Array(initial);
-    this.grow = opts.grow !== undefined ? opts.grow : true;
+    this.grow = opts.grow ?? true;
     this.maxTapeSize = opts.maxTapeSize;
     this.maxSteps = opts.maxSteps;
     this.onOutputByte = opts.onOutputByte;
@@ -46,25 +42,29 @@ export class Interpreter {
 
     if (opts.input instanceof Uint8Array) {
       this.input = opts.input;
-    } else if (isStringInput(opts.input)) {
-      this.input = textEncoder ? textEncoder.encode(opts.input) : Buffer.from(opts.input, 'utf8');
+    } else if (typeof opts.input === 'string') {
+      this.input = textEncoder.encode(opts.input);
     } else {
       this.input = new Uint8Array(0);
     }
   }
 
   run(): Uint8Array {
-    const op = this.program.op;
-    const a = this.program.a;
-    const b = this.program.b;
-    const progLen = this.program.length;
+    const { op, a, b, length: progLen } = this.program;
+    const {
+      grow,
+      maxTapeSize,
+      maxSteps,
+      input,
+      onOutputByte: onOut,
+      onOutputBurst: onBurst,
+    } = this;
 
     let mem = this.memory;
     let ptr = this.ptr;
     let ip = this.ip;
-
-    const onOut = this.onOutputByte;
-    const onBurst = this.onOutputBurst;
+    let inputIndex = this.inputIndex;
+    let steps = 0;
 
     let collected = new Uint8Array(1024);
     let collectedLen = 0;
@@ -72,31 +72,29 @@ export class Interpreter {
     const emit = (byte: number): void => {
       if (onOut) {
         onOut(byte & BYTE_MASK);
-      } else {
-        if (collectedLen >= collected.length) {
-          const next = new Uint8Array(collected.length * 2);
-          next.set(collected);
-          collected = next;
-        }
-        collected[collectedLen++] = byte & BYTE_MASK;
+        return;
       }
+      if (collectedLen >= collected.length) {
+        const next = new Uint8Array(collected.length * 2);
+        next.set(collected);
+        collected = next;
+      }
+      collected[collectedLen++] = byte & BYTE_MASK;
     };
-
-    let steps = 0;
 
     const ensureCapacity = (index: number): void => {
       if (index < mem.length) return;
-      if (!this.grow) throw new Error(`Tape overflow at cell ${index}`);
+      if (!grow) throw new Error(`Tape overflow at cell ${index}`);
 
       let newLen = mem.length;
       while (newLen <= index) newLen *= 2;
 
-      if (this.maxTapeSize !== undefined) {
-        if (index >= this.maxTapeSize) {
-          throw new Error(`Tape size exceeded hard cap: ${this.maxTapeSize}`);
+      if (maxTapeSize !== undefined) {
+        if (index >= maxTapeSize) {
+          throw new Error(`Tape size exceeded hard cap: ${maxTapeSize}`);
         }
-        if (newLen > this.maxTapeSize) {
-          newLen = this.maxTapeSize;
+        if (newLen > maxTapeSize) {
+          newLen = maxTapeSize;
         }
       }
 
@@ -106,14 +104,9 @@ export class Interpreter {
       this.memory = mem;
     };
 
-    const readByte = (): number => {
-      if (this.inputIndex >= this.input.length) return 0;
-      return this.input[this.inputIndex++]!;
-    };
-
     while (ip < progLen) {
-      if (this.maxSteps !== undefined) {
-        if (steps >= this.maxSteps) throw new Error(`Step limit exceeded: ${this.maxSteps}`);
+      if (maxSteps !== undefined) {
+        if (steps >= maxSteps) throw new Error(`Step limit exceeded: ${maxSteps}`);
         steps += 1;
       }
 
@@ -148,7 +141,7 @@ export class Interpreter {
           const dest = ptr + arg;
           if (dest < 0) throw new Error('Pointer moved left of tape');
           ensureCapacity(dest);
-          const v = mem[ptr];
+          const v = mem[ptr]!;
           if (v !== 0) {
             const factor = b[ip] | 0;
             mem[dest] = (mem[dest]! + v * factor) & BYTE_MASK;
@@ -185,7 +178,9 @@ export class Interpreter {
         }
         case Op.In: {
           const count = arg >>> 0;
-          for (let k = 0; k < count; k++) mem[ptr] = readByte();
+          for (let k = 0; k < count; k++) {
+            mem[ptr] = inputIndex < input.length ? input[inputIndex++]! : 0;
+          }
           ip += 1;
           break;
         }
@@ -205,6 +200,7 @@ export class Interpreter {
 
     this.ptr = ptr;
     this.ip = ip;
+    this.inputIndex = inputIndex;
     this.memory = mem;
     return collected.subarray(0, collectedLen);
   }
