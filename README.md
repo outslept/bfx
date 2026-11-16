@@ -22,6 +22,12 @@ run a file:
 bfx hello.bf
 ```
 
+try sample brainfuck scripts from fixtures/:
+
+```bash
+bfx fixtures/helloworld.b
+```
+
 read source from stdin:
 
 ```bash
