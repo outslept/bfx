@@ -308,6 +308,4 @@ export function main(argv: string[] = process.argv.slice(2)): void {
   }
 }
 
-if (require.main === module) {
-  main();
-}
+main();
