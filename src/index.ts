@@ -1,4 +1,4 @@
-export * from './types';
-export { Lexer } from './lexer';
-export { Parser } from './parser';
-export { Interpreter } from './interpreter';
+export * from "./types.ts";
+export { Lexer } from "./lexer.ts";
+export { Parser } from "./parser.ts";
+export { Interpreter, type RuntimeOptions } from "./interpreter.ts";

@@ -1,4 +1,4 @@
-import { Op, type Program } from './types';
+import { Op, type Program } from "./types";
 
 const DEFAULT_TAPE_SIZE = 65536;
 const BURST_THRESHOLD = 8;
@@ -42,7 +42,7 @@ export class Interpreter {
 
     if (opts.input instanceof Uint8Array) {
       this.input = opts.input;
-    } else if (typeof opts.input === 'string') {
+    } else if (typeof opts.input === "string") {
       this.input = textEncoder.encode(opts.input);
     } else {
       this.input = new Uint8Array(0);
@@ -116,7 +116,7 @@ export class Interpreter {
       switch (code) {
         case Op.Move: {
           const nxt = ptr + arg;
-          if (nxt < 0) throw new Error('Pointer moved left of tape');
+          if (nxt < 0) throw new Error("Pointer moved left of tape");
           ensureCapacity(nxt);
           ptr = nxt;
           ip += 1;
@@ -139,7 +139,7 @@ export class Interpreter {
         }
         case Op.MulAdd: {
           const dest = ptr + arg;
-          if (dest < 0) throw new Error('Pointer moved left of tape');
+          if (dest < 0) throw new Error("Pointer moved left of tape");
           ensureCapacity(dest);
           const v = mem[ptr]!;
           if (v !== 0) {
@@ -159,7 +159,7 @@ export class Interpreter {
         }
         case Op.ScanL: {
           while (mem[ptr] !== 0) {
-            if (ptr === 0) throw new Error('Pointer moved left of tape');
+            if (ptr === 0) throw new Error("Pointer moved left of tape");
             ptr -= 1;
           }
           ip += 1;

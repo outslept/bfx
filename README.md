@@ -45,9 +45,9 @@ options:
 ## api
 
 ```ts
-import { Lexer, Parser, Interpreter } from 'bfx';
+import { Lexer, Parser, Interpreter } from "bfx";
 
-const lexer = new Lexer('++++++++[>++++++++<-]>+.');
+const lexer = new Lexer("++++++++[>++++++++<-]>+.");
 const parser = new Parser();
 const program = parser.parse(lexer);
 
@@ -59,7 +59,7 @@ configure input and runtime limits:
 
 ```ts
 const interpreter = new Interpreter(program, {
-  input: 'hello',
+  input: "hello",
   tapeSize: 65536,
   maxTapeSize: 1_000_000,
   maxSteps: 10_000_000,

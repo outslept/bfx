@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-import { readFileSync, statSync } from 'node:fs';
-import { parseArgs, styleText } from 'node:util';
-import { Interpreter, Lexer, Parser } from './index';
+import { readFileSync, statSync } from "node:fs";
+import { parseArgs, styleText } from "node:util";
+import { Interpreter, Lexer, Parser } from "./index.ts";
 
-const VERSION = '1.0.0';
+const VERSION = "1.0.0";
 const MAX_SOURCE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const EXIT_OK = 0;
 const EXIT_ERROR = 1;
 const EXIT_USAGE = 2;
 
-const KNOWN_OPTIONS = ['--help', '--no-color', '--version'] as const;
+const KNOWN_OPTIONS = ["--help", "--no-color", "--version"] as const;
 
 const BYTE_CHUNKS: readonly Buffer[] = Array.from({ length: 256 }, (_, i) => Buffer.from([i]));
 
@@ -35,10 +35,10 @@ function resolveStreamMode(
   noColorOpt: boolean,
   env: NodeJS.ProcessEnv = process.env,
 ): StreamMode {
-  const rich = Boolean(stream.isTTY && env.TERM !== 'dumb' && !env.VERCEL_ACCESSIBLE);
+  const rich = Boolean(stream.isTTY && env.TERM !== "dumb" && !env.VERCEL_ACCESSIBLE);
   if (noColorOpt || env.NO_COLOR) return { rich, color: false };
   if (env.FORCE_COLOR !== undefined) {
-    return { rich, color: env.FORCE_COLOR !== '0' && env.FORCE_COLOR !== '' };
+    return { rich, color: env.FORCE_COLOR !== "0" && env.FORCE_COLOR !== "" };
   }
   return { rich, color: rich };
 }
@@ -47,13 +47,13 @@ function sanitizeText(input: string): string {
   return input.replace(
     // Strip ANSI CSI/OSC sequences, C0/C1 controls, and zero-width / bidi format characters.
     /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g,
-    '',
+    "",
   );
 }
 
 function suggestOption(unknown: string): string | undefined {
-  if (!unknown.startsWith('-')) return undefined;
-  const norm = unknown.replace(/^-+/, '').toLowerCase();
+  if (!unknown.startsWith("-")) return undefined;
+  const norm = unknown.replace(/^-+/, "").toLowerCase();
   if (!norm) return undefined;
   return KNOWN_OPTIONS.find((opt) => {
     const target = opt.slice(2);
@@ -64,30 +64,30 @@ function suggestOption(unknown: string): string | undefined {
 function showHelp(noColorOpt: boolean): void {
   const mode = resolveStreamMode(process.stdout, noColorOpt);
   const styled = mode.rich && mode.color;
-  const bold = (s: string): string => (styled ? styleText('bold', s) : s);
-  const dim = (s: string): string => (styled ? styleText('dim', s) : s);
-  const heading = (s: string): string => (styled ? styleText(['bold', 'magenta'], s) : s);
-  const cmd = (s: string): string => (styled ? styleText('cyan', s) : s);
+  const bold = (s: string): string => (styled ? styleText("bold", s) : s);
+  const dim = (s: string): string => (styled ? styleText("dim", s) : s);
+  const heading = (s: string): string => (styled ? styleText(["bold", "magenta"], s) : s);
+  const cmd = (s: string): string => (styled ? styleText("cyan", s) : s);
 
-  const help = `${bold('bfx')} <file> [options]
-${dim('Execute a Brainfuck program from a file or stdin')}
+  const help = `${bold("bfx")} <file> [options]
+${dim("Execute a Brainfuck program from a file or stdin")}
 
-${heading('Arguments:')}
+${heading("Arguments:")}
   <file>           Path to a Brainfuck source file, or - for stdin
 
-${heading('Options:')}
-  ${bold('-h, --help')}       Show help for the command
-  ${bold('--no-color')}       Disable color output
-  ${bold('-v, --version')}    Print the CLI version
+${heading("Options:")}
+  ${bold("-h, --help")}       Show help for the command
+  ${bold("--no-color")}       Disable color output
+  ${bold("-v, --version")}    Print the CLI version
 
-${heading('Examples:')}
+${heading("Examples:")}
   Execute a Brainfuck file
-    ${cmd('bfx hello.bf')}
+    ${cmd("bfx hello.bf")}
 
   Execute a program from stdin
-    ${cmd('bfx -')}
+    ${cmd("bfx -")}
 
-${heading('Notes:')}
+${heading("Notes:")}
   Source input is UTF-8 text up to 10 MB. Program output is written as raw bytes to stdout.
 `;
   process.stdout.write(help);
@@ -99,11 +99,11 @@ function printError(err: CliError, noColorOpt: boolean): void {
   const lines: string[] = [];
 
   if (rich) {
-    const glyph = color ? styleText('red', '✗') : '✗';
-    const headline = color ? styleText('bold', safeMessage) : safeMessage;
+    const glyph = color ? styleText("red", "✗") : "✗";
+    const headline = color ? styleText("bold", safeMessage) : safeMessage;
     lines.push(`${glyph} ${headline}`);
   } else {
-    const prefix = color ? styleText('red', 'Error:') : 'Error:';
+    const prefix = color ? styleText("red", "Error:") : "Error:";
     lines.push(`${prefix} ${safeMessage}`);
   }
 
@@ -112,11 +112,11 @@ function printError(err: CliError, noColorOpt: boolean): void {
   }
 
   if (err.recovery) {
-    const recCmd = rich && color ? styleText('cyan', err.recovery.command) : err.recovery.command;
-    lines.push('', `  ${err.recovery.label}:`, `    ${recCmd}`);
+    const recCmd = rich && color ? styleText("cyan", err.recovery.command) : err.recovery.command;
+    lines.push("", `  ${err.recovery.label}:`, `    ${recCmd}`);
   }
 
-  process.stderr.write(`${lines.join('\n')}\n`);
+  process.stderr.write(`${lines.join("\n")}\n`);
 }
 
 function parseCliArgs(args: string[]): {
@@ -128,9 +128,9 @@ function parseCliArgs(args: string[]): {
   const parsed = parseArgs({
     args,
     options: {
-      help: { type: 'boolean', short: 'h' },
-      'no-color': { type: 'boolean' },
-      version: { type: 'boolean', short: 'v' },
+      help: { type: "boolean", short: "h" },
+      "no-color": { type: "boolean" },
+      version: { type: "boolean", short: "v" },
     },
     strict: false,
     allowPositionals: true,
@@ -143,43 +143,43 @@ function parseCliArgs(args: string[]): {
   let unknownOption: string | undefined;
 
   for (const token of parsed.tokens) {
-    if (token.kind !== 'option') continue;
-    if (token.name === 'help') help = true;
-    else if (token.name === 'version') version = true;
-    else if (token.name === 'no-color') noColor = true;
+    if (token.kind !== "option") continue;
+    if (token.name === "help") help = true;
+    else if (token.name === "version") version = true;
+    else if (token.name === "no-color") noColor = true;
     else if (
-      token.name.startsWith('no-') &&
-      (token.name === 'no-help' || token.name === 'no-version')
+      token.name.startsWith("no-") &&
+      (token.name === "no-help" || token.name === "no-version")
     ) {
       unknownOption ??= token.rawName;
-    } else if (typeof parsed.values[token.name] !== 'boolean') {
+    } else if (typeof parsed.values[token.name] !== "boolean") {
       unknownOption ??= token.rawName;
     } else {
       unknownOption ??= token.rawName;
     }
   }
 
-  if (help || (parsed.positionals[0] === 'help' && !unknownOption)) {
-    return { help: true, version: false, noColor, sourceFile: '' };
+  if (help || (parsed.positionals[0] === "help" && !unknownOption)) {
+    return { help: true, version: false, noColor, sourceFile: "" };
   }
 
   if (unknownOption) {
     const suggestion = suggestOption(unknownOption);
-    const hint = suggestion ? ` Did you mean ${suggestion}?` : '';
+    const hint = suggestion ? ` Did you mean ${suggestion}?` : "";
     throw new CliError(`Unknown option ${unknownOption} for bfx.${hint}`, EXIT_USAGE, [], {
-      label: 'See all options',
-      command: 'bfx --help',
+      label: "See all options",
+      command: "bfx --help",
     });
   }
 
   if (version) {
-    return { help: false, version: true, noColor, sourceFile: '' };
+    return { help: false, version: true, noColor, sourceFile: "" };
   }
 
   if (parsed.positionals.length === 0) {
     throw new CliError("Can't execute without a file argument.", EXIT_USAGE, [], {
-      label: 'Pass a file or read from stdin',
-      command: 'bfx <FILE>',
+      label: "Pass a file or read from stdin",
+      command: "bfx <FILE>",
     });
   }
 
@@ -188,7 +188,7 @@ function parseCliArgs(args: string[]): {
       `Can't execute bfx. Expected 1 file argument, got ${parsed.positionals.length}.`,
       EXIT_USAGE,
       [],
-      { label: 'See usage', command: 'bfx --help' },
+      { label: "See usage", command: "bfx --help" },
     );
   }
 
@@ -196,27 +196,27 @@ function parseCliArgs(args: string[]): {
 }
 
 function readSource(sourceFile: string): string {
-  if (sourceFile === '-') {
+  if (sourceFile === "-") {
     if (process.stdin.isTTY) {
       throw new CliError("Can't read from stdin without piped input.", EXIT_USAGE, [], {
-        label: 'Pipe a program to stdin',
-        command: 'bfx -',
+        label: "Pipe a program to stdin",
+        command: "bfx -",
       });
     }
     const buf = readFileSync(0);
     if (buf.byteLength > MAX_SOURCE_SIZE) {
       throw new CliError("Can't read stdin. Source exceeds the 10 MB limit.", EXIT_ERROR, [
-        ['Limit', '10 MB'],
+        ["Limit", "10 MB"],
       ]);
     }
-    return buf.toString('utf8');
+    return buf.toString("utf8");
   }
 
   const stat = statSync(sourceFile, { throwIfNoEntry: false });
   if (!stat) {
     throw new CliError(`Couldn't find file ${sourceFile}.`, EXIT_ERROR, [], {
-      label: 'Check the file path, then run',
-      command: 'bfx <FILE>',
+      label: "Check the file path, then run",
+      command: "bfx <FILE>",
     });
   }
   if (stat.isDirectory()) {
@@ -224,21 +224,21 @@ function readSource(sourceFile: string): string {
       `Can't execute ${sourceFile}. Path is a directory, not a file.`,
       EXIT_ERROR,
       [],
-      { label: 'Pass a Brainfuck source file', command: 'bfx <FILE>' },
+      { label: "Pass a Brainfuck source file", command: "bfx <FILE>" },
     );
   }
   if (stat.size > MAX_SOURCE_SIZE) {
     throw new CliError(`Can't read ${sourceFile}. Source exceeds the 10 MB limit.`, EXIT_ERROR, [
-      ['Limit', '10 MB'],
+      ["Limit", "10 MB"],
     ]);
   }
 
-  return readFileSync(sourceFile, 'utf8');
+  return readFileSync(sourceFile, "utf8");
 }
 
 function formatRuntimeError(error: unknown, sourceFile: string): CliError {
   const raw = error instanceof Error ? error.message : String(error);
-  const label = sourceFile === '-' ? 'stdin' : sourceFile || 'program';
+  const label = sourceFile === "-" ? "stdin" : sourceFile || "program";
 
   const syntaxMatch = /^Unmatched '(\[|\])' at (\d+):(\d+)$/.exec(raw);
   if (syntaxMatch) {
@@ -249,26 +249,26 @@ function formatRuntimeError(error: unknown, sourceFile: string): CliError {
   return new CliError(
     `Failed to execute ${label}. ${raw}.`,
     EXIT_ERROR,
-    sourceFile && sourceFile !== '-' ? [['File', sourceFile]] : [],
+    sourceFile && sourceFile !== "-" ? [["File", sourceFile]] : [],
   );
 }
 
 function isBrokenPipe(error: unknown): boolean {
-  return error instanceof Error && (error as NodeJS.ErrnoException).code === 'EPIPE';
+  return error instanceof Error && (error as NodeJS.ErrnoException).code === "EPIPE";
 }
 
 export function main(argv: string[] = process.argv.slice(2)): void {
-  process.stdout.on('error', (err: NodeJS.ErrnoException) => {
-    if (err.code === 'EPIPE') process.exit(EXIT_OK);
+  process.stdout.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EPIPE") process.exit(EXIT_OK);
     throw err;
   });
 
-  process.on('SIGINT', () => process.exit(130));
-  process.on('SIGHUP', () => process.exit(129));
-  process.on('SIGTERM', () => process.exit(143));
+  process.on("SIGINT", () => process.exit(130));
+  process.on("SIGHUP", () => process.exit(129));
+  process.on("SIGTERM", () => process.exit(143));
 
-  let noColor = argv.includes('--no-color');
-  let sourceFile = '';
+  let noColor = argv.includes("--no-color");
+  let sourceFile = "";
 
   try {
     const parsed = parseCliArgs(argv);

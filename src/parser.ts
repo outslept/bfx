@@ -1,5 +1,5 @@
-import { Lexer } from './lexer';
-import { Op, type BFChar, type Program, type Token } from './types';
+import { Lexer } from "./lexer.ts";
+import { Op, type BFChar, type Program, type Token } from "./types.ts";
 
 interface Instruction {
   op: Op;
@@ -45,38 +45,38 @@ export class Parser {
 
   private emitFromToken(lexer: Lexer, token: Token): void {
     switch (token.ch) {
-      case '>': {
-        this.flat.push({ op: Op.Move, a: 1 + this.countMore(lexer, '>'), b: 0 });
+      case ">": {
+        this.flat.push({ op: Op.Move, a: 1 + this.countMore(lexer, ">"), b: 0 });
         break;
       }
-      case '<': {
-        this.flat.push({ op: Op.Move, a: -(1 + this.countMore(lexer, '<')), b: 0 });
+      case "<": {
+        this.flat.push({ op: Op.Move, a: -(1 + this.countMore(lexer, "<")), b: 0 });
         break;
       }
-      case '+': {
-        const n = 1 + this.countMore(lexer, '+');
+      case "+": {
+        const n = 1 + this.countMore(lexer, "+");
         if (n % 256 !== 0) this.flat.push({ op: Op.Add, a: n, b: 0 });
         break;
       }
-      case '-': {
-        const n = 1 + this.countMore(lexer, '-');
+      case "-": {
+        const n = 1 + this.countMore(lexer, "-");
         if (n % 256 !== 0) this.flat.push({ op: Op.Add, a: -n, b: 0 });
         break;
       }
-      case '.': {
-        this.flat.push({ op: Op.Out, a: 1 + this.countMore(lexer, '.'), b: 0 });
+      case ".": {
+        this.flat.push({ op: Op.Out, a: 1 + this.countMore(lexer, "."), b: 0 });
         break;
       }
-      case ',': {
-        this.flat.push({ op: Op.In, a: 1 + this.countMore(lexer, ','), b: 0 });
+      case ",": {
+        this.flat.push({ op: Op.In, a: 1 + this.countMore(lexer, ","), b: 0 });
         break;
       }
-      case '[': {
+      case "[": {
         this.forwardStack.push({ index: this.flat.length, loc: token.loc });
         this.flat.push({ op: Op.JmpF, a: 0, b: 0 });
         break;
       }
-      case ']': {
+      case "]": {
         const top = this.forwardStack.pop();
         if (!top) throw new Error(`Unmatched ']' at ${token.loc.line}:${token.loc.column}`);
         this.flat[top.index]!.a = this.flat.length;
@@ -96,7 +96,7 @@ export class Parser {
       if (ins.op === Op.JmpF) {
         const j = ins.a;
         const closer = input[j];
-        if (!closer || closer.op !== Op.JmpB) throw new Error('Invalid jump structure');
+        if (!closer || closer.op !== Op.JmpB) throw new Error("Invalid jump structure");
 
         if (this.tryScan(input, out, i, j) || this.tryMulLoop(input, out, i, j)) {
           i = j;
@@ -110,7 +110,7 @@ export class Parser {
 
       if (ins.op === Op.JmpB) {
         const start = loopStack.pop();
-        if (start === undefined) throw new Error('Unbalanced loops during optimize');
+        if (start === undefined) throw new Error("Unbalanced loops during optimize");
         out[start]!.a = out.length;
         out.push({ op: Op.JmpB, a: start + 1, b: 0 });
         continue;
@@ -119,7 +119,7 @@ export class Parser {
       this.pushMerged(out, ins);
     }
 
-    if (loopStack.length > 0) throw new Error('Unbalanced loops after optimize');
+    if (loopStack.length > 0) throw new Error("Unbalanced loops after optimize");
     return out;
   }
 

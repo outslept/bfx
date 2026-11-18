@@ -1,4 +1,4 @@
-export type BFChar = '<' | '>' | '+' | '-' | '.' | ',' | '[' | ']';
+export type BFChar = "<" | ">" | "+" | "-" | "." | "," | "[" | "]";
 
 export interface Location {
   line: number;

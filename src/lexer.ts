@@ -1,6 +1,6 @@
-import type { BFChar, Token } from './types';
+import type { BFChar, Token } from "./types.ts";
 
-const LANG = new Set<string>(['<', '>', '+', '-', '.', ',', '[', ']']);
+const LANG = new Set<string>(["<", ">", "+", "-", ".", ",", "[", "]"]);
 
 const isBF = (c: string): c is BFChar => LANG.has(c);
 
@@ -36,7 +36,7 @@ export class Lexer {
       const line = this.line;
       const column = this.col;
 
-      if (ch === '\n') {
+      if (ch === "\n") {
         this.line += 1;
         this.col = 1;
       } else {
