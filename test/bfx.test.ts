@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
@@ -143,5 +143,20 @@ test("cli handles flags, files, stdin and error exit codes", () => {
     expect(syntax.stderr).toMatch(/bad\.bf:1:1 Unmatched "\["\./);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("fixtures compile and self-checking programs pass", () => {
+  const fixturesDir = join(import.meta.dirname, "../fixtures");
+  for (const name of readdirSync(fixturesDir)) {
+    const src = readFileSync(join(fixturesDir, name), "utf8");
+    expect(() => compile(src), name).not.toThrow();
+  }
+
+  for (const quine of ["392quine.b", "400quine.b", "dquine.b"]) {
+    const src = readFileSync(join(fixturesDir, quine), "utf8");
+    const out = new TextDecoder().decode(exec(src));
+    expect(src.replace(/\s+/g, "")).toContain(out.replace(/\s+/g, ""));
+    expect(new TextDecoder().decode(exec(out)), quine).toBe(out);
   }
 });
